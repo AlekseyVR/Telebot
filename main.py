@@ -31,7 +31,7 @@ def is_admin(user_id: int) -> bool:
 
 
 # 3. Basic command handler
-@bot.message_handler(commands=['start', 'help'])
+@bot.message_handler(commands=['start'])
 def send_welcome(message: Message) -> None:
     user_id: int = message.from_user.id
 
@@ -41,11 +41,27 @@ def send_welcome(message: Message) -> None:
         print(f"Попытка доступа от неавторизованного пользователя! ID: {user_id}")
         return
 
-    bot.reply_to(message, "✅ Авторизация успешна! Серверный мониторинг готов к работе.\n\n"
-                          "Доступные команды:\n"
-                          "/status - Статус системы\n"
-                          "/getlogs - Получить логи\n"
-                          "/reboot - Перезагрузка сервера")
+    bot.reply_to(message, "👋 Привет! Я твой бот-монитор. Авторизация успешна.\n\n"
+                          "Напиши /help, чтобы увидеть список всех команд и их подробное описание.")
+
+@bot.message_handler(commands=['help'])
+def send_help(message: Message) -> None:
+    user_id: int = message.from_user.id
+    if not is_admin(user_id):
+        bot.reply_to(message, "⛔ У вас нет доступа к этому боту.")
+        return
+    help_text: str = (
+        "🛠 <b>Руководство по Server Monitor Bot</b>\n\n"
+        "📊 <b>/status</b> — Сформировать и прислать текущий срез состояния сервера:\n"
+        "  • Загрузка процессора (CPU) и памяти (RAM).\n"
+        "  • Свободное место на дисках C:\\ и D:\\.\n"
+        "  • Статус API (Telegram, Gemini) и Пинг.\n"
+        "  • Состояние запущенных процессов (Watchdog).\n\n"
+        "📁 <b>/getlogs</b> — Запросить файлы логов. Бот проверит пути, указанные в <code>config.json</code>, и пришлет все найденные документы прямо в этот чат.\n\n"
+        "🔄 <b>/reboot</b> — Экстренная удаленная перезагрузка сервера. <i>(Команда выполнится через 5 секунд после вызова, в чат будет отправлено оповещение с указанием инициатора)</i>.\n\n"
+        "⚙️ <i>Примечание: Автоматические проверки (алерты об упавших скриптах и тихие ежечасные отчеты) работают в фоне и не требуют ввода команд.</i>"
+    )
+    bot.reply_to(message, help_text, parse_mode='HTML')
 
 
 @bot.message_handler(commands=['status'])
