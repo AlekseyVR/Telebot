@@ -2,3 +2,4 @@
 venv/
 .idea
 config.json
+run_monitor.bat

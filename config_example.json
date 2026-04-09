@@ -1,0 +1,30 @@
+{
+  "admins": [
+    123456789,
+    987654321
+  ],
+  "target_chat_id": -100123456789,
+  "enable_group_only_mode": true,
+  "intervals": {
+    "watchdog_check_sec": 60,
+    "silent_report_sec": 3600
+  },
+  "ping_hosts": {
+    "Google": "8.8.8.8",
+    "Telegram API": "api.telegram.org",
+    "Gemini API": "generativelanguage.googleapis.com"
+  },
+  "http_hosts": {
+    "Telegram API": "https://api.telegram.org",
+    "Gemini API": "https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+  },
+  "processes_to_watch": [
+    "your_script.py",
+    "nginx.exe",
+    "notepad.exe"
+  ],
+  "log_files": {
+    "Project_Log": "C:\\path\\to\\your\\app.log",
+    "Monitor_Log": "./monitor.log"
+  }
+}
