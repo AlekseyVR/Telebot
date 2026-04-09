@@ -95,6 +95,6 @@ copy config.example.json config.json
 
 Вот как выглядит отчет о статусе сервера (`/status`) в Telegram:
 
-![Пример отчета /status](assets/status_screenshot.png)
+![Пример отчета /status](assets/screenshot.jpg)
 
 ```
