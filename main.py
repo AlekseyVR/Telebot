@@ -67,6 +67,46 @@ def send_status(message):
                               text=f"❌ Ошибка при сборе данных: {e}")
 
 
+@bot.message_handler(commands=['getlogs'])
+def send_logs(message):
+    user_id = message.from_user.id
+
+    # Строгая проверка прав (логи - это конфиденциальная инфа)
+    if not is_admin(user_id):
+        bot.reply_to(message, "⛔ У вас нет доступа к этой команде.")
+        return
+
+    msg = bot.reply_to(message, "📁 Ищу файлы логов, указанные в конфиге...")
+
+    log_files = config.get("log_files", {})
+
+    # Если словарь пуст
+    if not log_files:
+        bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id,
+                              text="🤷‍♂️ В файле config.json не указаны пути к логам (блок log_files).")
+        return
+
+    # Проходимся по словарю и отправляем файлы
+    files_sent = 0
+    for name, path in log_files.items():
+        if os.path.exists(path):
+            try:
+                # Открываем файл в бинарном режиме 'rb' для отправки
+                with open(path, 'rb') as document:
+                    bot.send_document(message.chat.id, document, caption=f"📄 {name}")
+                files_sent += 1
+            except Exception as e:
+                bot.send_message(message.chat.id, f"❌ Не удалось прочитать {name}: {e}")
+        else:
+            bot.send_message(message.chat.id, f"⚠️ Файл не найден: {name}\nПроверьте путь: <code>{path}</code>",
+                             parse_mode='HTML')
+
+    # Завершающее сообщение
+    if files_sent > 0:
+        bot.send_message(message.chat.id, f"✅ Отправка логов завершена. Передано файлов: {files_sent}.")
+    else:
+        bot.send_message(message.chat.id, "❌ Ни один файл логов не был отправлен (не найдены или ошибка доступа).")
+
 def background_loop():
     print("🔄 Фоновый мониторинг запущен...")
 
