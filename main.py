@@ -165,6 +165,34 @@ def background_loop():
         time.sleep(watchdog_sec)
 
 
+@bot.message_handler(commands=['reboot'])
+def reboot_server(message):
+    user_id = message.from_user.id
+
+    # Строгая проверка прав
+    if not is_admin(user_id):
+        bot.reply_to(message, "⛔ У вас нет прав на выполнение этой команды.")
+        # Логируем наглую попытку
+        print(f"⚠️ Попытка перезагрузки от неавторизованного ID: {user_id}")
+        return
+
+    # Получаем юзернейм админа для отчета
+    admin_name = message.from_user.username or message.from_user.first_name
+
+    # Отправляем прощальное сообщение
+    bot.reply_to(message,
+                 f"🔄 <b>Внимание!</b>\nАдминистратор @{admin_name} инициировал перезагрузку сервера.\n\nПерезагрузка через 5 секунд...",
+                 parse_mode='HTML')
+
+    # Даем боту 2 секунды, чтобы сообщение гарантированно ушло на сервер Telegram
+    time.sleep(2)
+
+    try:
+        # Выполняем системную команду Windows (shutdown: /r - reboot, /t 5 - таймер 5 сек)
+        os.system("shutdown /r /t 5")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Ошибка при попытке перезагрузки: {e}")
+
 # 4. Запуск бота
 if __name__ == "__main__":
     print("🤖 Бот запущен и ожидает команд...")

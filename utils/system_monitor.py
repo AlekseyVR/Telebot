@@ -1,41 +1,41 @@
 import subprocess
-
 import psutil
 import datetime
 import os
 import platform
 import urllib.request
 import urllib.error
+from typing import Any
 
 
-def get_uptime():
-    """Возвращает время работы системы без перезагрузки"""
+def get_uptime() -> str:
+    """Returns system uptime without rebooting"""
     boot_time = datetime.datetime.fromtimestamp(psutil.boot_time())
     now = datetime.datetime.now()
     uptime = now - boot_time
-    # Форматируем, убирая микросекунды
+    # Formatting by removing microseconds
     return str(uptime).split('.')[0]
 
 
-def get_cpu_info():
-    """Возвращает % загрузки процессора"""
-    # interval=0.5 нужен, чтобы psutil успел замерить загрузку (иначе выдаст 0)
+def get_cpu_info() -> float:
+    """Returns % CPU Usage"""
+    # interval=0.5 is needed so that psutil has time to measure the load (otherwise it will return 0)
     cpu_percent = psutil.cpu_percent(interval=0.5)
     return cpu_percent
 
 
-def get_ram_info():
-    """Возвращает данные об оперативной памяти (GB и %)"""
+def get_ram_info() -> tuple[float, float, float]:
+    """Returns RAM data (used_gb, total_gb, percent)"""
     ram = psutil.virtual_memory()
     total_gb = round(ram.total / (1024 ** 3), 2)
     used_gb = round(ram.used / (1024 ** 3), 2)
     return used_gb, total_gb, ram.percent
 
 
-def get_disk_info():
-    """Возвращает информацию о дисках C и D"""
+def get_disk_info() -> str:
+    """Returns information about the C and D drives"""
     report = ""
-    # Проверяем диски C и D (для Windows)
+    # Checking the C and D drives (for Windows)
     for drive in ['C:\\', 'D:\\']:
         if os.path.exists(drive):
             usage = psutil.disk_usage(drive)
@@ -44,7 +44,7 @@ def get_disk_info():
             percent = usage.percent
             report += f"💾 Диск {drive} {free_gb} GB свободно из {total_gb} GB ({percent}%)\n"
 
-    # Если запуск на Linux (опционально, на будущее)
+    # If running on Linux (optional, for the future)
     if platform.system() == "Linux":
         usage = psutil.disk_usage('/')
         free_gb = round(usage.free / (1024 ** 3), 2)
@@ -53,13 +53,12 @@ def get_disk_info():
     return report.strip()
 
 
-
-def check_ping(host="8.8.8.8"):
-    # Windows использует '-n', Linux/Mac используют '-c'
+def check_ping(host: str = "8.8.8.8") -> str:
+    # Windows uses '-n', Linux/Mac uses '-c'
     param = "-n" if platform.system().lower() == "windows" else "-c"
     command = ["ping", param, "1", host]
     try:
-        # Выполняем команду скрыто, ждем максимум 3 секунды
+        # Execute the command covertly, wait a maximum of 3 seconds
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=3)
         if result.returncode == 0:
             return f"🟢 Online ({host})"
@@ -69,23 +68,24 @@ def check_ping(host="8.8.8.8"):
         return f"🔴 Ошибка пинга ({host})"
 
 
-def check_http_status(url):
-    """Проверяет доступность WEB-ресурса и ищет блокировки"""
+def check_http_status(url: str) -> str:
+    """Checks the availability of the web resource and looks for locks"""
     try:
-        # Маскируемся под браузер, так как некоторые API блокируют "голых" ботов
+        # Masquerading as a browser, as some APIs block "naked" bots
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         with urllib.request.urlopen(req, timeout=5) as response:
-            # Если дошли сюда, значит статус 200-299
+            #  If you got here, then the status is 200-299
             return "🟢 OK (Доступ есть)"
 
     except urllib.error.HTTPError as e:
-        # Именно здесь мы ловим блокировки
+        # This is where we catch blockages
         if e.code == 403:
             return "🔴 ЗАБЛОКИРОВАН (403 Forbidden)"
         elif e.code == 429:
             return "🟡 ЛИМИТ (429 Too Many Requests)"
         elif e.code == 401 or e.code == 404:
-            # 401/404 для API часто значит, что сам сервис жив, просто мы стучимся без ключа/не туда. Это нормально для проверки.
+            # A 401/404 for an API often means that the service itself is alive,
+            # it's just that we're knocking without a key/in the wrong place. This is normal to check.
             return f"🟢 OK (API отвечает: {e.code})"
         else:
             return f"🔴 Ошибка сервера (HTTP {e.code})"
@@ -96,8 +96,8 @@ def check_http_status(url):
         return f"🔴 Ошибка ({str(e)})"
 
 
-def get_raw_process_status(process_list):
-    """Возвращает словарь {имя_процесса: True/False}"""
+def get_raw_process_status(process_list: list[str]) -> dict[str, bool]:
+    """Returns the {process_name: True/False} dictionary"""
     if not process_list:
         return {}
 
@@ -118,8 +118,8 @@ def get_raw_process_status(process_list):
     return status_dict
 
 
-def check_processes(process_list):
-    """Возвращает красивую строку для отчета Telegram"""
+def check_processes(process_list: list[str]) -> str:
+    """Returns a nice string for the Telegram report"""
     status_dict = get_raw_process_status(process_list)
     if not status_dict:
         return "🤷‍♂️ Список процессов пуст"
@@ -133,25 +133,24 @@ def check_processes(process_list):
     return report.strip()
 
 
-def generate_system_report(config):
+def generate_system_report(config: dict[str, Any]) -> str:
     uptime = get_uptime()
     cpu = get_cpu_info()
     ram_used, ram_total, ram_percent = get_ram_info()
     disks = get_disk_info()
 
-    # Достаем список процессов из конфига
+    # Taking out the list of processes from the config
     processes_to_watch = config.get("processes_to_watch", [])
     process_status = check_processes(processes_to_watch)
 
-    # Динамический пинг
+    # Dynamic Ping
     ping_report = ""
     for name, host in config.get("ping_hosts", {}).items():
         ping_report += f"📡 {name}: {check_ping(host)}\n"
 
-    # Проверка HTTP блокировок и API
+    # Checking HTTP Locks and APIs
     http_report = ""
     for name, url in config.get("http_hosts", {}).items():
-        # Умная подстановка ключей из .env
         if "{GEMINI_API_KEY}" in url:
             api_key = os.getenv("GEMINI_API_KEY", "")
             if not api_key:
