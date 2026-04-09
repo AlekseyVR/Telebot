@@ -54,6 +54,7 @@ GEMINI_API_KEY=ваш_ключ_от_gemini_api
 **Для Windows (в терминале):**
 ```cmd
 copy config.example.json config.json
+```
 
 ---
 
