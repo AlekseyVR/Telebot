@@ -1,5 +1,30 @@
+# 🔒 Секреты и локальные конфиги (САМОЕ ВАЖНОЕ)
 .env
-venv/
-.idea
 config.json
-run_monitor.bat
+
+# 📝 Логи
+*.log
+bot.log
+system_log.txt
+error_log.txt
+
+# 🐍 Виртуальные окружения Python
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 🗃️ Базы данных (на будущее, если добавишь SQLite)
+*.sqlite3
+*.db
+
+# 🛠️ Настройки редакторов кода (PyCharm, VSCode)
+.idea/
+.vscode/
+*.swp
+
+# 💻 Системный мусор ОС
+.DS_Store
+Thumbs.db
