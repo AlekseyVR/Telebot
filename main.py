@@ -1,25 +1,25 @@
 import os
-import json
 import telebot
 import threading
 import time
 from dotenv import load_dotenv
 from telebot.types import Message
-from typing import Any
-
+from models.config import CONFIG
 from utils.system_monitor import generate_system_report, get_raw_process_status
+from utils.logger import logger
+
 
 # 1. Loading environment and config variables
 load_dotenv()
 BOT_TOKEN: str | None = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    exit("❌ Ошибка: BOT_TOKEN не найден в файле .env")
+    bot_not_found = "❌ Ошибка: BOT_TOKEN не найден в файле .env"
+    logger.error(bot_not_found)
+    exit(bot_not_found)
 
-with open("config.json", "r", encoding="utf-8") as f:
-    config: dict[str, Any] = json.load(f)
 
-ADMINS: list[int] = config.get("admins", [])
+ADMINS: list[int] = CONFIG.admins
 
 # 2. Bot initialization
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -37,8 +37,8 @@ def send_welcome(message: Message) -> None:
 
     if not is_admin(user_id):
         bot.reply_to(message, "⛔ У вас нет доступа к этому боту.")
-        # Output the ID to the console so that you can copy it to config.json
-        print(f"Попытка доступа от неавторизованного пользователя! ID: {user_id}")
+        # Output the ID to the console so that you can copy it to CONFIG (config.json)
+        logger.warning(f"Попытка доступа (start) от неавторизованного пользователя! ID: {user_id}")
         return
 
     bot.reply_to(message, "👋 Привет! Я твой бот-монитор. Авторизация успешна.\n\n"
@@ -57,7 +57,7 @@ def send_help(message: Message) -> None:
         "  • Свободное место на дисках C:\\ и D:\\.\n"
         "  • Статус API (Telegram, Gemini) и Пинг.\n"
         "  • Состояние запущенных процессов (Watchdog).\n\n"
-        "📁 <b>/getlogs</b> — Запросить файлы логов. Бот проверит пути, указанные в <code>config.json</code>, и пришлет все найденные документы прямо в этот чат.\n\n"
+        "📁 <b>/getlogs</b> — Запросить файлы логов. Бот проверит пути, указанные в CONFIG <code>config.json</code>, и пришлет все найденные документы прямо в этот чат.\n\n"
         "🔄 <b>/reboot</b> — Экстренная удаленная перезагрузка сервера. <i>(Команда выполнится через 5 секунд после вызова, в чат будет отправлено оповещение с указанием инициатора)</i>.\n\n"
         "⚙️ <i>Примечание: Автоматические проверки (алерты об упавших скриптах и тихие ежечасные отчеты) работают в фоне и не требуют ввода команд.</i>"
     )
@@ -78,7 +78,7 @@ def send_status(message: Message) -> None:
 
     try:
         # Generate a report by passing a config with process settings
-        report: str = generate_system_report(config)
+        report: str = generate_system_report()
         # Edit the message, replacing "Collecting data..." on the finished report
         bot.edit_message_text(chat_id=message.chat.id, message_id=msg.message_id,
                               text=report, parse_mode='HTML')
@@ -98,7 +98,7 @@ def send_logs(message: Message) -> None:
 
     msg: Message = bot.reply_to(message, "📁 Ищу файлы логов, указанные в конфиге...")
 
-    log_files: dict[str, str] = config.get("log_files", {})
+    log_files: dict[str, str] = CONFIG.log_files
 
     # If the dictionary is empty
     if not log_files:
@@ -129,18 +129,13 @@ def send_logs(message: Message) -> None:
 
 
 def background_loop() -> None:
-    print("🔄 Фоновый мониторинг запущен...")
+    logger.info("🔄 Фоновый мониторинг запущен...")
 
-    intervals: dict[str, int] = config.get("intervals", {})
-    watchdog_sec: int = intervals.get("watchdog_check_sec", 60)
-    report_sec: int = intervals.get("silent_report_sec", 3600)
-
+    script_start_time: float = time.time()  # НОВОЕ: Запоминаем время запуска
     # Determine where to send reports (group or personal account of the first admin)
-    target_chat_id: int = config.get("target_chat_id", 0)
+    target_chat_id: int = CONFIG.target_chat_id
     if target_chat_id == 0 and ADMINS:
         target_chat_id = ADMINS[0]
-
-    processes: list[str] = config.get("processes_to_watch", [])
 
     last_report_time: float = time.time()
     dead_processes_memory: set[str] = set()  # Memory so that the bot does not spam alerts
@@ -148,11 +143,18 @@ def background_loop() -> None:
     while True:
         current_time: float = time.time()
 
-        # --- 1. WATCHDOG (Emergency Checks) ---
-        if processes:
-            status_dict: dict[str, bool] = get_raw_process_status(processes)
-            for proc_name, is_alive in status_dict.items():
+        if CONFIG.intervals.planned_restart_sec > 0:  # --- 0. Planning restart
+            if int(current_time - script_start_time) >= CONFIG.intervals.planned_restart_sec:
+                logger.info(f"⏳ Прошло {int(CONFIG.intervals.planned_restart_sec / 60 / 60)} часов. Инициирую плановый рестарт...")
+                # noinspection PyUnresolvedReferences
+                os._exit(0)  # Hard reset script (Bat-file start it again)
 
+        # --- 1. WATCHDOG (Emergency Checks) ---
+        if CONFIG.processes_to_watch:
+            status_dict: dict[str, bool] = get_raw_process_status(CONFIG.processes_to_watch)
+            for proc_name, info in status_dict.items():
+
+                is_alive = info["is_alive"]
                 # If the process has crashed and we haven't written about it yet
                 if not is_alive and proc_name not in dead_processes_memory:
                     dead_processes_memory.add(proc_name)
@@ -160,7 +162,7 @@ def background_loop() -> None:
                     try:
                         bot.send_message(target_chat_id, alert_msg, parse_mode='HTML')
                     except Exception as e:
-                        print(f"Ошибка алерта: {e}")
+                        logger.error(f"Ошибка алерта: {e}")
 
                 # If the process is running again and was on the list of dead (you restarted it)
                 elif is_alive and proc_name in dead_processes_memory:
@@ -169,21 +171,21 @@ def background_loop() -> None:
                     try:
                         bot.send_message(target_chat_id, ok_msg, parse_mode='HTML')
                     except Exception as e:
-                        pass
+                        logger.error(f"Ошибка алерта: {e}")
 
         # --- 2. SILENT REPORT ---
-        if current_time - last_report_time >= report_sec:
+        if current_time - last_report_time >= CONFIG.intervals.silent_report_sec:
             try:
-                report: str = generate_system_report(config)
+                report: str = generate_system_report()
                 # disable_notification=True makes the message "silent"
                 bot.send_message(target_chat_id, f"🕒 <b>Плановый отчет</b>\n\n{report}",
                                  parse_mode='HTML', disable_notification=True)
                 last_report_time = current_time
             except Exception as e:
-                print(f"Ошибка планового отчета: {e}")
+                logger.error(f"Ошибка планового отчета: {e}")
 
         # Sleep until the next Watchdog check
-        time.sleep(watchdog_sec)
+        time.sleep(CONFIG.intervals.watchdog_check_sec)
 
 
 @bot.message_handler(commands=['reboot'])
@@ -194,7 +196,7 @@ def reboot_server(message: Message) -> None:
     if not is_admin(user_id):
         bot.reply_to(message, "⛔ У вас нет прав на выполнение этой команды.")
         # Logging a brazen attempt
-        print(f"⚠️ Попытка перезагрузки от неавторизованного ID: {user_id}")
+        logger.warning(f"⚠️ Попытка перезагрузки от неавторизованного ID: {user_id}")
         return
 
     # Get the admin username for the report
@@ -217,7 +219,7 @@ def reboot_server(message: Message) -> None:
 
 # 4. Running the bot
 if __name__ == "__main__":
-    print("🤖 Бот запущен и ожидает команд...")
+    logger.info("🤖 Бот запущен и ожидает команд...")
 
     # Running a background loop in a parallel thread
     # daemon=True means that the thread will terminate itself when we close the script

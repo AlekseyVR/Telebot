@@ -1,11 +1,12 @@
 import subprocess
 import psutil
 import datetime
+import time
 import os
 import platform
 import urllib.request
 import urllib.error
-from typing import Any
+from models.config import CONFIG
 
 
 def get_uptime() -> str:
@@ -96,14 +97,13 @@ def check_http_status(url: str) -> str:
         return f"🔴 Ошибка ({str(e)})"
 
 
-def get_raw_process_status(process_list: list[str]) -> dict[str, bool]:
-    """Returns the {process_name: True/False} dictionary"""
+def get_raw_process_status(process_list: list[str]) -> dict[str, dict]:
+    """Returns {process_name: {'is_alive': bool, 'uptime': str}}"""
     if not process_list:
         return {}
+    status_dict = {p: {"is_alive": False, "uptime": ""} for p in process_list}
 
-    status_dict = {p: False for p in process_list}
-
-    for proc in psutil.process_iter(['name', 'cmdline']):
+    for proc in psutil.process_iter(['name', 'cmdline', 'create_time']):
         try:
             name = proc.info['name'].lower() if proc.info['name'] else ""
             cmdline = " ".join(proc.info['cmdline']).lower() if proc.info['cmdline'] else ""
@@ -111,10 +111,12 @@ def get_raw_process_status(process_list: list[str]) -> dict[str, bool]:
             for target in process_list:
                 target_lower = target.lower()
                 if target_lower in name or target_lower in cmdline:
-                    status_dict[target] = True
+                    create_time = proc.info['create_time']
+                    uptime_seconds = int(time.time() - create_time)
+                    uptime_str = str(datetime.timedelta(seconds=uptime_seconds))
+                    status_dict[target] = {"is_alive": True, "uptime": uptime_str}
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
-
     return status_dict
 
 
@@ -125,32 +127,32 @@ def check_processes(process_list: list[str]) -> str:
         return "🤷‍♂️ Список процессов пуст"
 
     report = ""
-    for p, is_alive in status_dict.items():
-        if is_alive:
-            report += f"✅ {p}: Работает\n"
+    for p, info in status_dict.items():
+        if info["is_alive"]:
+            # ДОБАВИЛИ вывод аптайма
+            report += f"✅ {p}: Работает (⏱ {info['uptime']})\n"
         else:
             report += f"❌ {p}: НЕ НАЙДЕН\n"
     return report.strip()
 
 
-def generate_system_report(config: dict[str, Any]) -> str:
+def generate_system_report() -> str:
     uptime = get_uptime()
     cpu = get_cpu_info()
     ram_used, ram_total, ram_percent = get_ram_info()
     disks = get_disk_info()
 
     # Taking out the list of processes from the config
-    processes_to_watch = config.get("processes_to_watch", [])
-    process_status = check_processes(processes_to_watch)
+    process_status = check_processes(CONFIG.processes_to_watch)
 
     # Dynamic Ping
     ping_report = ""
-    for name, host in config.get("ping_hosts", {}).items():
+    for name, host in CONFIG.ping_hosts.items():
         ping_report += f"📡 {name}: {check_ping(host)}\n"
 
     # Checking HTTP Locks and APIs
     http_report = ""
-    for name, url in config.get("http_hosts", {}).items():
+    for name, url in CONFIG.http_hosts.items():
         if "{GEMINI_API_KEY}" in url:
             api_key = os.getenv("GEMINI_API_KEY", "")
             if not api_key:
