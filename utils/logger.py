@@ -1,5 +1,6 @@
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 
 # Create logger object
 logger = logging.getLogger("ServerMonitor")
@@ -18,6 +19,6 @@ logger.addHandler(console_handler)
 
 # 2. Handler for logfile writer in root project folder
 # encoding="utf-8" required, because i have cyrillic symbols in log
-file_handler = logging.FileHandler("telebot.log", mode="a", encoding="utf-8")
+file_handler = RotatingFileHandler("bot.log", maxBytes=5_000_000, backupCount=3, encoding="utf-8")
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
