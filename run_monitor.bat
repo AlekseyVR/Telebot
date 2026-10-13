@@ -8,8 +8,7 @@ title Telegram Server Monitor
 :loop
 echo [%date% %time%] Starting monitoring bot...
 
-call venv\Scripts\activate
-python telebot.py
+".venv\Scripts\python.exe" avr_telebot.py
 
 echo [%date% %time%] Script crashed or closed. Restarting in 5 seconds...
 timeout /t 5
